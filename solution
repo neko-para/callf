@@ -1,0 +1,18 @@
+lang c
+std c89
+optimize 0
+debug true
+bit 32
+target libcallf
+	type archive
+	source @callf.c
+	install
+		inst_inc @callf.h
+		inst_lib !libcallf/libcallf.a
+target test
+	default true
+	type excutable
+	source @test.c
+	library !libcallf
+	link callf
+	depend libcallf
