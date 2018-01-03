@@ -1,43 +1,58 @@
 #include "callf.h"
 
-void callfPure(void* func_ptr, unsigned return_size, unsigned push_size, void* return_block, const void* push_block) {
-	if (return_size <= 8) {
-		__asm__ volatile (
-			"movl %1, %%ecx;"
-			"subl %%ecx, %%esp;"
-			"movl %%esp, %%edi;"
-			"movl %3, %%esi;"
-			"shrl $2, %%ecx;"
-			"cld;"
-			"rep movsd;"
-			"call *%0;"
-			"addl %1, %%esp;"
-			"movl %2, %%ecx;"
-			"movl %%eax, (%%ecx);"
-			"movl %%edx, 4(%%ecx);"
-			:
-			: "m" (func_ptr), "m" (push_size), "m" (return_block), "m" (push_block)
-		);
-	} else {
-		__asm__ volatile (
-			"movl %1, %%ecx;"
-			"subl %%ecx, %%esp;"
-			"movl %%esp, %%edi;"
-			"movl %3, %%esi;"
-			"shrl $2, %%ecx;"
-			"cld;"
-			"rep movsd;"
-			"pushl %2;"
-			"call *%0;"
-			"addl %1, %%esp;"
-			:
-			: "m" (func_ptr), "m" (push_size), "m" (return_block), "m" (push_block)
-		);
-	}
+void callfPure(void* func_ptr, unsigned return_size, unsigned push_size, void* return_block, const void* push_block, int return_float) {
+	__asm__ volatile (
+		"movl %1, %%ecx;"
+		"subl %%ecx, %%esp;"
+		"movl %%esp, %%edi;"
+		"movl %4, %%esi;"
+		"shrl $2, %%ecx;"
+		"cld;"
+		"rep movsd;"
+		"movl %2, %%eax;"
+		"cmpl $8, %%eax;"
+		"jle .return_less_than_8;"
+		"pushl %3;"
+		".return_less_than_8:;"
+		"call *%0;"
+		"addl %1, %%esp;"
+		"movl %%eax, %%ecx;"
+		"movl %5, %%eax;"
+		"cmpl $0, %%eax;"
+		"jne .return_float_type;"
+		"movl %2, %%eax;"
+		"cmpl $8, %%eax;"
+		"jle .end;"
+		"movl %3, %%eax;"
+		"movl %%ecx, (%%eax);"
+		"movl %%edx, 4(%%eax);"
+		"jmp .end;"
+		".return_float_type:"
+		"movl %3, %%ecx;"
+		"movl %2, %%eax;"
+		"cmpl $4, %%eax;"
+		"je .return_float;"
+		"cmpl $8, %%eax;"
+		"je .return_double;"
+		"cmpl $12, %%eax;"
+		"je .return_long_double;"
+		"jmp .end;"
+		".return_float:"
+		"fstps (%%ecx);"
+		"jmp .end;"
+		".return_double:"
+		"fstpl (%%ecx);"
+		"jmp .end;"
+		".return_long_double:"
+		"fstpt (%%ecx);"
+		".end:;"
+		:
+		: "m" (func_ptr), "m" (push_size), "m" (return_size), "m" (return_block), "m" (push_block), "m" (return_float)
+	);
 }
 
 static unsigned parse_size(const char** ptr) {
-	switch(**ptr) {
+	switch(*((*ptr)++)) {
 		case 'b':
 		case 'B':
 		case 'w':
@@ -46,7 +61,7 @@ static unsigned parse_size(const char** ptr) {
 		case 'I':
 		case 'l':
 		case 'L':
-		case 's':
+		case 'f':
 			return 4;
 		case 'q':
 		case 'Q':
@@ -54,11 +69,13 @@ static unsigned parse_size(const char** ptr) {
 			return 8;
 		case 't':
 			return 12;
-		case 'm': {
+		case 's': {
 			unsigned n = 0;
-			while (((unsigned)((*ptr)[1] - '0')) < 10) {
-				n = ((n + (n << 2)) << 1) + (*++(*ptr) ^ '0');
+			const char* p = (*ptr) + 1;
+			while (((unsigned)(*p - '0')) < 10) {
+				n = ((n + (n << 2)) << 1) + (*p++ ^ '0');
 			}
+			*ptr = p;
 			return n + ((n & 3) ? 4 : 0);
 		}
 	}
@@ -69,7 +86,6 @@ static unsigned count(const char* ptr) {
 	unsigned size = 0;
 	while (*ptr) {
 		size += parse_size(&ptr);
-		++ptr;
 	}
 	return size;
 }
@@ -77,7 +93,7 @@ static unsigned count(const char* ptr) {
 void callfAuto(void* func_ptr, void* return_block, const char* desc, const void *const* data) {
 	char return_type = *desc;
 	unsigned return_size = parse_size(&desc);
-	unsigned return_buffer[return_size];
+	unsigned char return_buffer[return_size];
 	unsigned size = count(desc);
 	unsigned char buffer[size];
 	unsigned char* ptr = buffer;
@@ -106,7 +122,7 @@ void callfAuto(void* func_ptr, void* return_block, const char* desc, const void 
 			break;
 		case 'I':
 		case 'L':
-		case 's':
+		case 'f':
 			*((unsigned*)ptr) = *(unsigned*)*data;
 			ptr += 4;
 			break;
@@ -125,7 +141,7 @@ void callfAuto(void* func_ptr, void* return_block, const char* desc, const void 
 			((unsigned*)ptr)[2] = ((unsigned*)*data)[2];
 			ptr += 12;
 			break;
-		case 'm': {
+		case 's': {
 			unsigned n = 0, i;
 			while (((unsigned)(desc[1] - '0')) < 10) {
 				n = ((n + (n << 2)) << 1) + (*++desc ^ '0');
@@ -140,50 +156,50 @@ void callfAuto(void* func_ptr, void* return_block, const char* desc, const void 
 		}
 		++desc;
 	}
-	callfPure(func_ptr, return_size, size, return_buffer, buffer);
+	callfPure(func_ptr, return_size, size, return_buffer, buffer, return_type == 'f' || return_type == 'd' || return_type == 't');
 	switch(return_type) {
 		case 'b':
-			*(char*)return_block = *(int*)buffer;
+			*(char*)return_block = *(int*)return_buffer;
 			break;
 		case 'B':
-			*(unsigned char*)return_block = *(unsigned*)buffer;
+			*(unsigned char*)return_block = *(unsigned*)return_buffer;
 			break;
 		case 'w':
-			*(short*)return_block = *(int*)buffer;
+			*(short*)return_block = *(int*)return_buffer;
 			break;
 		case 'W':
-			*(unsigned short*)return_block = *(unsigned*)buffer;
+			*(unsigned short*)return_block = *(unsigned*)return_buffer;
 			break;
 		case 'i':
 		case 'l':
-			*(int*)return_block = *(int*)buffer;
+			*(int*)return_block = *(int*)return_buffer;
 			break;
 		case 'I':
 		case 'L':
-		case 's':
-			*(unsigned*)return_block = *(unsigned*)buffer;
+		case 'f':
+			*(unsigned*)return_block = *(unsigned*)return_buffer;
 			break;
 		case 'q':
-			*(long long*)return_block = *(long long*)buffer;
+			*(long long*)return_block = *(long long*)return_buffer;
 			break;
 		case 'Q':
 		case 'd':
-			*(unsigned long long*)return_block = *(unsigned long long*)buffer;
+			*(unsigned long long*)return_block = *(unsigned long long*)return_buffer;
 			break;
 		case 't':
-			((unsigned*)return_block)[0] = ((unsigned*)buffer)[0];
-			((unsigned*)return_block)[1] = ((unsigned*)buffer)[1];
-			((unsigned*)return_block)[2] = ((unsigned*)buffer)[2];
+			((unsigned*)return_block)[0] = ((unsigned*)return_buffer)[0];
+			((unsigned*)return_block)[1] = ((unsigned*)return_buffer)[1];
+			((unsigned*)return_block)[2] = ((unsigned*)return_buffer)[2];
 			break;
-		case 'm': {
+		case 's': {
 			unsigned i;
 			unsigned n = return_size >> 2, r = return_size & 3;
 			for (i = 0; i < n; ++i) {
-				((unsigned*)return_block)[i] = ((unsigned*)buffer)[i];
+				((unsigned*)return_block)[i] = ((unsigned*)return_buffer)[i];
 			}
 			n <<= 2;
 			for (i = 0; i < r; ++i) {
-				((unsigned char*)return_block)[n + i] = ((unsigned char*)buffer)[n + i];
+				((unsigned char*)return_block)[n + i] = ((unsigned char*)return_buffer)[n + i];
 			}
 			break;
 		}

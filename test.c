@@ -1,20 +1,16 @@
 #include "callf.h"
 #include <stdio.h>
+#include <math.h>
 
-typedef struct T {
-	int x, y, z;	
-} T;
-
-T test(int x) {
-	T t;
-	t.x = x;
-	return t;
+double rs(double x) {
+	printf("%lf\n", x);
+	return sqrt(x);
 }
 
 int main() {
-	T ret;
-	int in = 6;
+	double ret;
+	double in = 2.0;
 	const void* param[1] = {(const void*)&in};
-	callfAuto(test, &ret, "m12i", param);
-	printf("%d\n", ret.x);
+	callfAuto(rs, &ret, "dd", param);
+	printf("%lf\n", ret);
 }
