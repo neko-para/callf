@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 void callfPure(void* func_ptr, unsigned return_size, unsigned push_size, void* return_block, const void* push_block);
+void callfAuto(void* func_ptr, void* return_block, const char* desc, const void *const* data);
 
 #ifdef __cplusplus
 }

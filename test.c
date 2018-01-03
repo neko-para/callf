@@ -14,6 +14,7 @@ T test(int x) {
 int main() {
 	T ret;
 	int in = 6;
-	callfPure(test, sizeof(T), 4, &ret, &in);
+	const void* param[1] = {(const void*)&in};
+	callfAuto(test, &ret, "m12i", param);
 	printf("%d\n", ret.x);
 }
