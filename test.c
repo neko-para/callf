@@ -13,4 +13,5 @@ int main() {
 	const void* param[1] = {(const void*)&in};
 	callfAuto(rs, &ret, "dd", param);
 	printf("%lf\n", ret);
+	return 0;
 }
