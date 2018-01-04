@@ -1,17 +1,15 @@
 #include "callf.h"
 #include <stdio.h>
-#include <math.h>
 
-double rs(double x) {
-	printf("%lf\n", x);
-	return sqrt(x);
+void func() {
+	int ret = printf("Hello");
 }
 
 int main() {
-	double ret;
-	double in = 2.0;
+	int ret;
+	const char* in = "Hello World\n";
 	const void* param[1] = {(const void*)&in};
-	callfAuto(rs, &ret, "dd", param);
-	printf("%lf\n", ret);
+	callfAuto(printf, &ret, "ip", param);
+	printf("%d\n", ret);
 	return 0;
 }

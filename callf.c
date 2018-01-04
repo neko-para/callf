@@ -22,7 +22,7 @@ void callfPure(void* func_ptr, unsigned return_size, unsigned push_size, void* r
 		"jne .return_float_type;"
 		"movl %2, %%eax;"
 		"cmpl $8, %%eax;"
-		"jle .end;"
+		"jg .end;"
 		"movl %3, %%eax;"
 		"movl %%ecx, (%%eax);"
 		"movl %%edx, 4(%%eax);"
@@ -53,6 +53,8 @@ void callfPure(void* func_ptr, unsigned return_size, unsigned push_size, void* r
 
 static unsigned parse_size(const char** ptr) {
 	switch(*((*ptr)++)) {
+		case 'v':
+			return 0;
 		case 'b':
 		case 'B':
 		case 'w':
@@ -62,6 +64,7 @@ static unsigned parse_size(const char** ptr) {
 		case 'l':
 		case 'L':
 		case 'f':
+		case 'p':
 			return 4;
 		case 'q':
 		case 'Q':
@@ -122,6 +125,7 @@ void callfAuto(void* func_ptr, void* return_block, const char* desc, const void 
 			break;
 		case 'I':
 		case 'L':
+		case 'p':
 		case 'f':
 			*((unsigned*)ptr) = *(unsigned*)*data;
 			ptr += 4;
